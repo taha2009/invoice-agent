@@ -11,6 +11,7 @@ pymongo>=4.0
 reportlab
 gspread
 google-auth
+google-cloud-storage
 pydantic-settings
 python-dotenv
 httpx

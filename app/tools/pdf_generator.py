@@ -1,4 +1,4 @@
-import os
+import logging
 import tempfile
 from datetime import datetime
 
@@ -17,6 +17,37 @@ from reportlab.platypus import (
 )
 
 from app.config import settings
+
+log = logging.getLogger(__name__)
+
+
+def _fetch_signature() -> io.BytesIO | None:
+    """Download the signature image from GCS and return it as a BytesIO buffer.
+
+    Returns None when the GCS env vars are not configured or the download fails.
+    """
+    if not settings.gcs_bucket or not settings.gcs_signature_object:
+        return None
+    try:
+        from google.cloud import (  # lazy import — only needed when GCS is configured
+            storage,
+        )
+
+        client = storage.Client()
+        bucket = client.bucket(settings.gcs_bucket)
+        blob = bucket.blob(settings.gcs_signature_object)
+        buf = io.BytesIO()
+        blob.download_to_file(buf)
+        buf.seek(0)
+        return buf
+    except Exception:
+        log.exception(
+            "Failed to download signature from gs://%s/%s",
+            settings.gcs_bucket,
+            settings.gcs_signature_object,
+        )
+        return None
+
 
 PAGE_W, PAGE_H = A4
 MARGIN = 20 * mm
@@ -300,10 +331,9 @@ def generate_pdf(
         f"IFSC Code: {settings.bank_ifsc}"
     )
 
-    if settings.issuer_signature_path and os.path.exists(
-        settings.issuer_signature_path
-    ):
-        sig_img = Image(settings.issuer_signature_path, width=30 * mm, height=15 * mm)
+    sig_buf = _fetch_signature()
+    if sig_buf is not None:
+        sig_img = Image(sig_buf, width=30 * mm, height=15 * mm)
         sig_block = [sig_img, Paragraph(settings.issuer_name, _bank)]
     else:
         sig_block = [

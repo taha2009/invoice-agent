@@ -49,8 +49,10 @@ class Settings(BaseSettings):
     bank_ac_number: str
     bank_ifsc: str
 
-    # Optional: path to signature image (PNG/JPG); leave blank until provided
-    issuer_signature_path: str = ""
+    # GCS bucket shared across storage needs
+    gcs_bucket: str = ""
+    # Object path inside the bucket for the issuer signature image (PNG/JPG)
+    gcs_signature_object: str = ""
 
     # MongoDB
     mongodb_uri: str = ""

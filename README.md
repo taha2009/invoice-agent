@@ -2,7 +2,7 @@
 
 A Telegram bot that generates PDF invoices via a conversational AI interface (Gemini). Send invoice details in plain language; the bot extracts the data, generates a PDF invoice, logs the record to a Google Sheet, and sends the PDF back.
 
-**Stack:** FastAPI · python-telegram-bot · LangGraph (Gemini) · ReportLab · Google Sheets (ADC) · Cloud Run
+**Stack:** FastAPI · python-telegram-bot · LangGraph (Gemini) · ReportLab · Google Sheets (ADC) · GCS · Cloud Run
 
 **Optional:** MongoDB — persists conversation state and session management across restarts. Without it, state is kept in memory and lost on restart.
 
@@ -56,13 +56,20 @@ uvicorn app.main:app --reload --port 8000
 
 ### 6. Signature image (optional)
 
-To embed a scanned signature in the PDF, set:
+The signature image is pulled from a GCS bucket at PDF-generation time. Upload a PNG or JPG to your bucket and set:
 
 ```
-ISSUER_SIGNATURE_PATH=path/to/signature.png
+GCS_BUCKET=your-gcs-bucket
+GCS_SIGNATURE_OBJECT=signatures/signature.png
 ```
 
-The PDF falls back to the typed name if the path is unset or missing.
+`GCS_BUCKET` is a shared bucket for all GCS-backed assets; `GCS_SIGNATURE_OBJECT` is the object path inside it. The PDF falls back to the typed issuer name if either variable is unset or the download fails.
+
+For local development, authenticate with ADC first:
+
+```bash
+gcloud auth application-default login
+```
 
 ---
 
@@ -76,6 +83,7 @@ On Cloud Run, Google Sheets auth uses ADC from the attached service identity —
 gcloud services enable \
   run.googleapis.com \
   sheets.googleapis.com \
+  storage.googleapis.com \
   cloudbuild.googleapis.com \
   artifactregistry.googleapis.com
 ```
@@ -98,6 +106,22 @@ gcloud iam service-accounts create invoice-bot-sa \
 
 Share your Google Sheet with the service account email as **Editor**:
 `invoice-bot-sa@<PROJECT_ID>.iam.gserviceaccount.com`
+
+Create the shared GCS bucket (if it doesn't exist yet):
+
+```bash
+gcloud storage buckets create gs://<GCS_BUCKET> \
+  --location=asia-south1 \
+  --uniform-bucket-level-access
+```
+
+Grant the service account read access to it:
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
+  --member="serviceAccount:invoice-bot-sa@<PROJECT_ID>.iam.gserviceaccount.com" \
+  --role="roles/storage.objectViewer"
+```
 
 ### 4. First deploy
 
@@ -202,6 +226,7 @@ LangGraph ReAct Agent  (Gemini)
       ▼
 generate_invoice tool
       ├── Google Sheets  →  reserve invoice number, append row  (ADC)
+      ├── GCS            →  download signature image            (ADC)
       └── ReportLab PDF  →  temp file → sent to Telegram → deleted
 ```
 
