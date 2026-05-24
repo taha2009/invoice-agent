@@ -1,0 +1,9 @@
+.env
+env.yaml
+design.md
+__pycache__/
+*.pyc
+.git/
+*.pdf
+
+local_notes

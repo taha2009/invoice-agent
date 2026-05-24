@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-telegram-bot>=20.0
+langgraph>=1.0.5
+langchain>=1.2.0
+langchain-core>=1.2.7
+langchain-google-genai>=4.2.0
+langgraph-checkpoint-mongodb>=0.3.0
+pymongo>=4.0
+
+reportlab
+gspread
+google-auth
+pydantic-settings
+python-dotenv
+httpx
