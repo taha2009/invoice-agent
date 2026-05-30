@@ -1,30 +1,86 @@
 # tg-invoice-bot
 
-A Telegram bot that generates PDF invoices via a conversational AI interface (Gemini). Send invoice details in plain language; the bot extracts the data, generates a PDF invoice, logs the record to a Google Sheet, and sends the PDF back.
+**A Telegram bot that generates PDF invoices from plain-language messages.** Describe an invoice in a chat; the bot extracts the data, reserves an invoice number in Google Sheets, generates a PDF, and sends it back — all in one conversation.
 
-**Stack:** FastAPI · python-telegram-bot · LangGraph (Gemini) · ReportLab · Google Sheets (ADC) · GCS · Cloud Run
-
-**Optional:** MongoDB — persists conversation state and session management across restarts. Without it, state is kept in memory and lost on restart.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Gemini](https://img.shields.io/badge/Gemini-2.0_Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
+[![Cloud Run](https://img.shields.io/badge/deploy-Cloud_Run-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 
 ---
 
-## Local Development
+## What it looks like
 
-Useful for verifying the PDF output and Sheet writes before deploying.
+```
+You:  New invoice for Acme Corp, 123 Business Park, Mumbai.
+      Fees: Legal consultation 15000, Contract drafting 10000.
+      Disbursements: Filing fee 500, Stamp duty 200.
+      Date: today.
 
-**Prerequisites:** Python 3.12+, a GCP project, a Telegram bot token. MongoDB Atlas is optional but recommended for persistence.
+Bot:  Invoice 2026-27/1 for ₹25,700 is ready.
+      [sends PDF]
+```
 
-### 1. Clone and install
+No forms, no spreadsheet fiddling — just describe the invoice the way you'd say it out loud.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A([User on Telegram]) -->|natural language| B["FastAPI /webhook\n(secret-token check)"]
+    B --> C["LangGraph ReAct Agent\n(Gemini 2.0 Flash)"]
+    C -->|tool call when all fields confirmed| D[generate_invoice]
+    D --> E["Google Sheets\nreserve number · append row"]
+    D --> F["GCS\ndownload signature image"]
+    D --> G["ReportLab\nbuild PDF"]
+    G --> H["Send PDF to Telegram\ndelete temp file"]
+```
+
+**Stack:** FastAPI · python-telegram-bot · LangGraph · Gemini · ReportLab · Google Sheets (ADC) · GCS · Cloud Run
+
+**Optional:** MongoDB — persists conversation state across restarts. Without it, state is in-memory and lost on restart.
+
+---
+
+## Project structure
+
+```
+invoice-agent/
+├── app/
+│   ├── main.py              # FastAPI app + Telegram webhook
+│   ├── agent.py             # LangGraph graph + system prompt
+│   ├── sessions.py          # Checkpointer + session/thread-ID management
+│   ├── config.py            # Settings (pydantic-settings + .env)
+│   └── tools/
+│       ├── invoice_tool.py  # @tool generate_invoice
+│       ├── pdf_generator.py # ReportLab PDF generator
+│       └── sheets_ledger.py # gspread read/append via ADC
+├── Dockerfile
+├── .env.example
+├── env.yaml.example
+└── requirements.txt
+```
+
+---
+
+## Quick start (local)
+
+Useful for verifying PDF output and Sheet writes before deploying. Telegram webhooks require a public HTTPS URL, so bot messaging only works once deployed to Cloud Run.
+
+**Prerequisites:** Python 3.12+, a GCP project with a service account, a Telegram bot token.
+
+### 1. Install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/taha2009/invoice-agent.git
 cd invoice-agent
 pip install -r requirements.txt
 ```
 
 ### 2. Google Sheets auth (ADC)
-
-The app uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) for Sheets access. Export your credentials before running:
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service_account.json
@@ -34,12 +90,12 @@ The service account only needs to be shared on the Google Sheet as **Editor** �
 
 ### 3. Google Sheet
 
-Create a new Google Sheet. Leave it blank — the app automatically creates a tab named after `INVOICE_PREFIX` and writes headers on first run.
-
-Copy the Sheet ID from the URL:
+Create a new Google Sheet and copy the Sheet ID from the URL:
 `https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit`
 
-### 4. Configure `.env`
+Leave it blank — the app creates a tab named after `INVOICE_PREFIX` and writes headers on first run.
+
+### 4. Configure
 
 ```bash
 cp .env.example .env
@@ -52,20 +108,16 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-> Telegram webhooks require a public HTTPS URL, so bot messaging only works once deployed to Cloud Run. Local runs are useful for testing PDF generation and Sheet writes directly.
-
 ### 6. Signature image (optional)
 
-The signature image is pulled from a GCS bucket at PDF-generation time. Upload a PNG or JPG to your bucket and set:
+Upload a PNG or JPG to a GCS bucket and set:
 
-```
+```env
 GCS_BUCKET=your-gcs-bucket
 GCS_SIGNATURE_OBJECT=signatures/signature.png
 ```
 
-`GCS_BUCKET` is a shared bucket for all GCS-backed assets; `GCS_SIGNATURE_OBJECT` is the object path inside it. The PDF falls back to the typed issuer name if either variable is unset or the download fails.
-
-For local development, authenticate with ADC first:
+The PDF falls back to the typed issuer name if either variable is unset or the download fails. For local development, authenticate with:
 
 ```bash
 gcloud auth application-default login
@@ -73,7 +125,7 @@ gcloud auth application-default login
 
 ---
 
-## Cloud Run Deployment
+## Cloud Run deployment
 
 On Cloud Run, Google Sheets auth uses ADC from the attached service identity — no credentials file or env var needed.
 
@@ -127,8 +179,7 @@ gcloud storage buckets add-iam-policy-binding gs://<GCS_BUCKET> \
 
 ```bash
 cp env.yaml.example env.yaml
-# edit env.yaml — fill in all placeholder values
-# leave WEBHOOK_BASE_URL blank for now (set in step 4)
+# fill in all values — leave WEBHOOK_BASE_URL blank for now
 ```
 
 ```bash
@@ -191,66 +242,6 @@ gcloud run deploy $SERVICE \
   --source . \
   --region $REGION \
   --env-vars-file=env.yaml
-```
-
----
-
-## Example Conversation
-
-```
-User:   New invoice for Acme Corp, 123 Business Park, Mumbai.
-        Fees: Legal consultation 15000, Contract drafting 10000.
-        Disbursements: Filing fee 500, Stamp duty 200.
-        Date: today.
-
-Bot:    Invoice 2026-27/1 for ₹25,700 is ready.
-        [sends PDF]
-```
-
----
-
-## Architecture
-
-```
-User (Telegram)
-      │ natural language message
-      ▼
-Telegram Bot
-      │ HTTPS webhook
-      ▼
-FastAPI /webhook  ── secret-token check
-      │
-      ▼
-LangGraph ReAct Agent  (Gemini)
-      │ tool call when all fields collected
-      ▼
-generate_invoice tool
-      ├── Google Sheets  →  reserve invoice number, append row  (ADC)
-      ├── GCS            →  download signature image            (ADC)
-      └── ReportLab PDF  →  temp file → sent to Telegram → deleted
-```
-
-## Project Structure
-
-```
-invoice-agent/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app + Telegram webhook
-│   ├── agent.py             # LangGraph graph + system prompt
-│   ├── sessions.py          # Checkpointer + session/thread-ID management
-│   ├── config.py            # Settings (pydantic-settings + .env)
-│   └── tools/
-│       ├── __init__.py
-│       ├── invoice_tool.py  # @tool generate_invoice
-│       ├── pdf_generator.py # ReportLab PDF generator
-│       └── sheets_ledger.py # gspread read/append via ADC
-├── Dockerfile
-├── .dockerignore
-├── .env.example
-├── env.yaml.example
-├── requirements.txt
-└── LICENSE
 ```
 
 ---
