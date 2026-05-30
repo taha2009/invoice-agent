@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -126,7 +129,22 @@ async def whatsapp_verify(request: Request) -> Response:
 
 @app.post("/whatsapp/webhook")
 async def whatsapp_webhook(request: Request) -> dict:
-    payload = await request.json()
+    body = await request.body()
+
+    if settings.whatsapp_app_secret:
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        expected = (
+            "sha256="
+            + hmac.new(
+                settings.whatsapp_app_secret.encode(),
+                body,
+                hashlib.sha256,
+            ).hexdigest()
+        )
+        if not hmac.compare_digest(signature, expected):
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
+    payload = json.loads(body)
     await get_whatsapp_bot().process_update(payload)
     return {"ok": True}
 

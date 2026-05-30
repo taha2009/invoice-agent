@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
     whatsapp_verify_token: str = ""
+    whatsapp_app_secret: str = (
+        ""  # used to verify X-Hub-Signature-256 on incoming webhooks
+    )
     allowed_whatsapp_numbers: str = (
         ""  # comma-separated E.164 numbers; empty = allow all
     )

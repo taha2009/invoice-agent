@@ -137,8 +137,9 @@ The WhatsApp channel is disabled when `WHATSAPP_ACCESS_TOKEN` is empty. To enabl
 ```env
 WHATSAPP_ACCESS_TOKEN=your-system-user-token
 WHATSAPP_PHONE_NUMBER_ID=1234567890
+WHATSAPP_APP_SECRET=your-meta-app-secret   # from Meta app dashboard → Settings → Basic
 WHATSAPP_VERIFY_TOKEN=any-secret-you-choose
-ALLOWED_WHATSAPP_NUMBERS=919876543210   # leave blank to allow all
+ALLOWED_WHATSAPP_NUMBERS=919876543210      # leave blank to allow all
 ```
 
 3. Deploy the service (or expose it via ngrok for local testing), then in the Meta app dashboard set the webhook URL to `https://<your-service>/whatsapp/webhook` and subscribe to the **messages** field using the same `WHATSAPP_VERIFY_TOKEN`.
