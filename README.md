@@ -90,7 +90,7 @@ pip install -r requirements.txt
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service_account.json
 ```
 
-The service account only needs to be shared on the Google Sheet as **Editor** — no project-level IAM roles required.
+The service account only needs to be shared on the Google Sheet as **Editor** for Sheets access. If you also use the GCS signature feature, grant the service account `roles/storage.objectViewer` on the bucket (see the Cloud Run section).
 
 ### 3. Google Sheet
 
