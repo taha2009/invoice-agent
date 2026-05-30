@@ -114,11 +114,11 @@ class AgentResult:
         self.pdf_files = pdf_files
 
 
-def reset_session(user_id: int) -> None:
+def reset_session(user_id: int | str) -> None:
     _store.reset(user_id)
 
 
-async def run_agent(user_id: int, text: str) -> AgentResult:
+async def run_agent(user_id: int | str, text: str) -> AgentResult:
     thread_id = _store.get_thread_id(user_id)
     config = {"configurable": {"thread_id": thread_id}}
 

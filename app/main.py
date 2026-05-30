@@ -2,11 +2,12 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from telegram import Bot, BotCommand, InputFile
 
 from app.agent import reset_session, run_agent
 from app.config import settings
+from app.whatsapp import get_bot as get_whatsapp_bot
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -107,6 +108,26 @@ async def webhook(request: Request) -> dict:
             except OSError:
                 pass
 
+    return {"ok": True}
+
+
+@app.get("/whatsapp/webhook")
+async def whatsapp_verify(request: Request) -> Response:
+    params = request.query_params
+    challenge = get_whatsapp_bot().verify_webhook(
+        mode=params.get("hub.mode", ""),
+        token=params.get("hub.verify_token", ""),
+        challenge=params.get("hub.challenge", ""),
+    )
+    if challenge is None:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return Response(content=challenge, media_type="text/plain")
+
+
+@app.post("/whatsapp/webhook")
+async def whatsapp_webhook(request: Request) -> dict:
+    payload = await request.json()
+    await get_whatsapp_bot().process_update(payload)
     return {"ok": True}
 
 

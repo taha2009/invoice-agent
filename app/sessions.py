@@ -17,11 +17,11 @@ log = logging.getLogger(__name__)
 
 class SessionStore(abc.ABC):
     @abc.abstractmethod
-    def get_thread_id(self, user_id: int) -> str:
+    def get_thread_id(self, user_id: int | str) -> str:
         ...
 
     @abc.abstractmethod
-    def reset(self, user_id: int) -> None:
+    def reset(self, user_id: int | str) -> None:
         ...
 
     @abc.abstractmethod
@@ -47,7 +47,7 @@ class MemorySessionStore(SessionStore):
         self._sessions: dict[int, _Session] = {}
         self._checkpointer = InMemorySaver()
 
-    def get_thread_id(self, user_id: int) -> str:
+    def get_thread_id(self, user_id: int | str) -> str:
         now = datetime.now(timezone.utc)
         idle_limit = settings.session_idle_minutes * 60
         session = self._sessions.get(user_id)
@@ -59,7 +59,7 @@ class MemorySessionStore(SessionStore):
         log.info("New in-memory session for user %s → thread %s", user_id, thread_id)
         return thread_id
 
-    def reset(self, user_id: int) -> None:
+    def reset(self, user_id: int | str) -> None:
         self._sessions.pop(user_id, None)
 
     def checkpointer(self):
@@ -79,7 +79,7 @@ class MongoSessionStore(SessionStore):
     def _col(self):
         return self._client[self._db_name]["sessions"]
 
-    def get_thread_id(self, user_id: int) -> str:
+    def get_thread_id(self, user_id: int | str) -> str:
         now = datetime.now(timezone.utc)
         idle_limit = settings.session_idle_minutes * 60
         col = self._col()
@@ -106,7 +106,7 @@ class MongoSessionStore(SessionStore):
         log.info("New session for user %s → thread %s", user_id, thread_id)
         return thread_id
 
-    def reset(self, user_id: int) -> None:
+    def reset(self, user_id: int | str) -> None:
         self._col().update_many(
             {"user_id": user_id, "is_active": True},
             {"$set": {"is_active": False}},

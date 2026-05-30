@@ -54,6 +54,23 @@ class Settings(BaseSettings):
     # Object path inside the bucket for the issuer signature image (PNG/JPG)
     gcs_signature_object: str = ""
 
+    # WhatsApp (Meta Cloud API)
+    whatsapp_access_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_verify_token: str = ""
+    allowed_whatsapp_numbers: str = (
+        ""  # comma-separated E.164 numbers; empty = allow all
+    )
+
+    @computed_field
+    @property
+    def allowed_whatsapp_set(self) -> set[str]:
+        if not self.allowed_whatsapp_numbers.strip():
+            return set()
+        return {
+            n.strip() for n in self.allowed_whatsapp_numbers.split(",") if n.strip()
+        }
+
     # MongoDB
     mongodb_uri: str = ""
     mongodb_database: str = "invoice_agent"
